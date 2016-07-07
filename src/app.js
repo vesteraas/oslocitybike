@@ -32,7 +32,7 @@ function getBoundingBox(_lat, _lon, _halfSide) {
         latMax: rad2deg(lat + halfSide / radius),
         lonMin: rad2deg(lon - halfSide / pRadius),
         lonMax: rad2deg(lon + halfSide / pRadius)
-    }
+    };
 }
 
 function getDistanceBetween(lat1, lon1, lat2, lon2) {
@@ -43,7 +43,7 @@ function getDistanceBetween(lat1, lon1, lat2, lon2) {
     var dist = Math.sin(radlat1) * Math.sin(radlat2) + Math.cos(radlat1) * Math.cos(radlat2) * Math.cos(radtheta);
     dist = Math.acos(dist);
     dist = rad2deg(dist);
-    dist = dist * 60 * 1.1515
+    dist = dist * 60 * 1.1515;
     return Math.round(dist * 1.609344 * 10) / 10;
 }
 
@@ -57,7 +57,7 @@ function createDistanceComparator(lat, lon) {
         if (distA > distB)
             return 1;
         return 0;
-    }
+    };
 }
 
 function sortArrayByDistance(array, lat, lon) {
