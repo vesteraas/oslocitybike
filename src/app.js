@@ -1,3 +1,5 @@
+var firstRun = true;
+
 var WGS84_a = 6378137.0;
 var WGS84_b = 6356752.3;
 
@@ -10,7 +12,6 @@ function rad2deg(radians) {
 }
 
 function WGS84EarthRadius(lat) {
-    // http://en.wikipedia.org/wiki/Earth_radius
     var An = WGS84_a * WGS84_a * Math.cos(lat);
     var Bn = WGS84_b * WGS84_b * Math.sin(lat);
     var Ad = WGS84_a * Math.cos(lat);
@@ -47,15 +48,63 @@ function getDistanceBetween(lat1, lon1, lat2, lon2) {
     return Math.round(dist * 1.609344 * 10) / 10;
 }
 
+function getCardinal(angle) {
+    var directions = 8;
+
+    var degree = 360 / directions;
+    angle = angle + degree / 2;
+
+    if (angle >= 0 * degree && angle < 1 * degree) {
+        return "north";
+    } else if (angle >= 1 * degree && angle < 2 * degree) {
+        return "northeast";
+    } else if (angle >= 2 * degree && angle < 3 * degree) {
+        return "east";
+    } else if (angle >= 3 * degree && angle < 4 * degree) {
+        return "southeast";
+    } else if (angle >= 4 * degree && angle < 5 * degree) {
+        return "south";
+    } else if (angle >= 5 * degree && angle < 6 * degree) {
+        return "southwest";
+    } else if (angle >= 6 * degree && angle < 7 * degree) {
+        return "west";
+    } else if (angle >= 7 * degree && angle < 8 * degree) {
+        return "northwest";
+    }
+}
+
+function getBearing(lat1, lon1, lat2, lon2) {
+    var radlat1 = deg2rad(lat1);
+    var radlon1 = deg2rad(lon1);
+    var radlat2 = deg2rad(lat2);
+    var radlon2 = deg2rad(lon2);
+
+    var dLon = radlon2 - radlon1;
+    var dPhi = Math.log(Math.tan(radlat2 / 2.0 + Math.PI / 4.0) / Math.tan(radlat1 / 2.0 + Math.PI / 4.0));
+
+    if (Math.abs(dLon) > Math.PI) {
+        if (dLon > 0.0) {
+            dLon = -(2.0 * Math.PI - dLon);
+        } else {
+            dLon = (2.0 * Math.PI + dLon);
+        }
+    }
+
+    return getCardinal((rad2deg(Math.atan2(dLon, dPhi)) + 360.0) % 360.0);
+}
+
 function createDistanceComparator(lat, lon) {
     return function (a, b) {
         var distA = getDistanceBetween(lat, lon, a.Center.Latitude, a.Center.Longitude);
         var distB = getDistanceBetween(lat, lon, b.Center.Latitude, b.Center.Longitude);
 
-        if (distA < distB)
+        if (distA < distB) {
             return -1;
-        if (distA > distB)
+        }
+        if (distA > distB) {
             return 1;
+        }
+
         return 0;
     };
 }
@@ -64,20 +113,25 @@ function sortArrayByDistance(array, lat, lon) {
     var data = array.sort(createDistanceComparator(lat, lon));
     data.forEach(function (rack) {
         rack.Distance = getDistanceBetween(lat, lon, rack.Center.Latitude, rack.Center.Longitude) + "km";
+        rack.Direction = getBearing(lat, lon, rack.Center.Latitude, rack.Center.Longitude);
+
         delete rack.Center;
     });
     return data;
 }
 
-function setText(rack) {
-  simply.text({
-    title: rack.Title + '(' + rack.Distance + ')',
-    subtitle: rack.Availability.Bikes + ' bikes, ' + rack.Availability.Locks + ' locks'
-  });
+function setText(count, total, rack) {
+    simply.text({
+        title: 'Rack ' + (count + 1) + ' of ' + total,
+        subtitle: '\n' + rack.Title + ', ' + rack.Distance + ' ' + rack.Direction + '\n\nBikes: ' + rack.Availability.Bikes + ', Locks: ' + rack.Availability.Locks
+    });
 }
 
 function getNearbyBikeRacks() {
     navigator.geolocation.getCurrentPosition(function (pos) {
+        pos.coords.latitude = 59.95056;
+        pos.coords.longitude = 10.78198;
+
         var boundingBox = getBoundingBox(pos.coords.latitude, pos.coords.longitude, 2.5);
 
         var url = 'http://reisapi.ruter.no/Place/GetCityBikeStations?longmin=' +
@@ -86,14 +140,21 @@ function getNearbyBikeRacks() {
             boundingBox.latMin + '&latmax=' +
             boundingBox.latMax;
 
+        console.log(url);
+
         ajax({url: url, type: 'json', headers: {'Accept': 'application/json'}}, function (data) {
+            if (!firstRun) {
+                simply.vibe('short');
+            }
+            firstRun = false;
             if (data.length > 0) {
                 var racks = sortArrayByDistance(data, pos.coords.latitude, pos.coords.longitude);
+                var current = 0;
 
-                localStorage.setItem('current', 0);
+                localStorage.setItem('current', current);
                 localStorage.setItem('racks', JSON.stringify(data));
 
-                setText(racks[0]);
+                setText(0, racks.length, racks[current]);
             } else {
                 simply.text({title: 'No racks nearby!', subtitle: 'You are out of range!'});
                 localStorage.setItem('current', 0);
@@ -110,10 +171,14 @@ simply.on('singleClick', function (e) {
     if (e.button === 'up') {
         if (current > 0) {
             current--;
+        } else {
+            current = racks.length - 1;
         }
     } else if (e.button === 'down') {
         if (current < racks.length - 1) {
             current++;
+        } else {
+            current = 0;
         }
     } else {
         return;
@@ -124,9 +189,12 @@ simply.on('singleClick', function (e) {
     var rack = racks[current];
 
     if (rack) {
-      setText(rack);      
+        setText(current, racks.length, rack);
     }
 });
+
+simply.style('small');
+simply.fullscreen(true);
 
 simply.on('longClick', function (e) {
     if (e.button === 'select') {
@@ -134,4 +202,8 @@ simply.on('longClick', function (e) {
     }
 });
 
-getNearbyBikeRacks();
+simply.text({title: 'OsloCityBike', subtitle: 'Find the nearest bike!'});
+
+setTimeout(function () {
+    getNearbyBikeRacks();
+}, 2000);
