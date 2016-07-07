@@ -69,6 +69,13 @@ function sortArrayByDistance(array, lat, lon) {
     return data;
 }
 
+function setText(rack) {
+  simply.text({
+    title: rack.Title + '(' + rack.Distance + ')',
+    subtitle: rack.Availability.Bikes + ' bikes, ' + rack.Availability.Locks + ' locks'
+  });
+}
+
 function getNearbyBikeRacks() {
     navigator.geolocation.getCurrentPosition(function (pos) {
         var boundingBox = getBoundingBox(pos.coords.latitude, pos.coords.longitude, 2.5);
@@ -81,16 +88,12 @@ function getNearbyBikeRacks() {
 
         ajax({url: url, type: 'json', headers: {'Accept': 'application/json'}}, function (data) {
             if (data.length > 0) {
-                data = sortArrayByDistance(data, pos.coords.latitude, pos.coords.longitude);
+                var racks = sortArrayByDistance(data, pos.coords.latitude, pos.coords.longitude);
 
                 localStorage.setItem('current', 0);
                 localStorage.setItem('racks', JSON.stringify(data));
 
-                var s = data[0];
-                simply.text({
-                    title: s.Title,
-                    subtitle: s.Distance + ', ' + s.Availability.Bikes + ' bikes, ' + s.Availability.Locks + ' locks'
-                });
+                setText(racks[0]);
             } else {
                 simply.text({title: 'No racks nearby!', subtitle: 'You are out of range!'});
                 localStorage.setItem('current', 0);
@@ -121,10 +124,7 @@ simply.on('singleClick', function (e) {
     var rack = racks[current];
 
     if (rack) {
-      simply.text({
-          title: rack.Title,
-          subtitle: 'Dist:' + rack.Distance + ', Bike:' + rack.Availability.Bikes + ', Lock:' + rack.Availability.Locks
-      });      
+      setText(rack);      
     }
 });
 
